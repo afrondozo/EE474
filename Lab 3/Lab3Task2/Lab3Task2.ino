@@ -44,6 +44,19 @@ void TaskA(void) {
     }
 }
 
+void TaskB(void) {
+  for (int i = 1; i < 10; i++) {
+    writeLCD('0' + i);
+    delay(1000);
+  }
+  writeLCD('1');
+  writeLCD('0');
+  delay(1000);
+  sendCommand(0x01);
+  sendCommand(0x80);
+  delay(500);
+}
+
 void Task_C(void) {
     int[] notes = {NOTE_Bb, NOTE_B, NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G} 
     for (int i = 0; i < 10; i++) {
@@ -78,6 +91,28 @@ void scheduler() {
       task_list[i].status = WAITING;
     }
   }
+}
+
+void writeLCD(uint8_t data) {
+  uint8_t high = data & 0xF0;
+  uint8_t low = data << 4;
+  Wire.beginTransmission(ADDR);
+  Wire.write(high | 0x0D);  // bit 3 = backlight on
+  Wire.write((high & ~0x04) | 0x09);  // bit 3 = backlight on
+  Wire.write(low | 0x0D);  // bit 3 = backlight on
+  Wire.write((low & ~0x04) | 0x09);  // bit 3 = backlight on
+  Wire.endTransmission();
+}
+
+void sendCommand(uint8_t data) {
+  int8_t high = data & 0xF0;
+  uint8_t low = data << 4;
+  Wire.beginTransmission(ADDR);
+  Wire.write(high | 0x0C);  // bit 3 = backlight on
+  Wire.write((high & ~0x04) | 0x08);  // bit 3 = backlight on
+  Wire.write(low | 0x0C);  // bit 3 = backlight on
+  Wire.write((low & ~0x04) | 0x08);  // bit 3 = backlight on
+  Wire.endTransmission();
 }
 
 void setup() {

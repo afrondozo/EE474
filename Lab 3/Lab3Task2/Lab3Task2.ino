@@ -8,6 +8,11 @@
 #include "soc/gpio_periph.h"
 #include "soc/timer_group_reg.h"
 
+#include<Wire.h>
+#include<LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 #define OUTPUT1 5
 #define OUTPUT2 6
 
@@ -17,6 +22,8 @@
 
 // set LED toggle times and potentiometer reading time
 #define LED1_TOGGLE_INTERVAL 1000000
+
+#define ADDR 0x27
 
 // Track last toggle time
 static uint32_t last_toggle_time_LED1 = 0;
@@ -37,10 +44,11 @@ typedef struct {
 void TaskA(void) {
     // Read current GPIO output state
     // Toggle GPIO_PIN using XOR
-    for (int i = 0; i < 16; i ++) {
+    Serial.println("Running LED blinker");
+    for (int i = 0; i < 15; i ++) {
       uint32_t gpio_out = *((volatile uint32_t *)GPIO_OUT_REG);
       *((volatile uint32_t *)GPIO_OUT_REG) = gpio_out ^ (1 << OUTPUT1);
-      delay(500'000);
+      delay(500);
     }
 }
 
@@ -57,11 +65,11 @@ void TaskB(void) {
   delay(500);
 }
 
-void Task_C(void) {
-    int[] notes = {NOTE_Bb, NOTE_B, NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G} 
+void TaskC(void) {
+    note_t notes[] = {NOTE_Bb, NOTE_B, NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G}; 
     for (int i = 0; i < 10; i++) {
-      ledcWriteNote(OUTPUT2, note[i], 6); 
-      delay(400000);
+      ledcWriteNote(OUTPUT2, notes[i], 6); 
+      delay(400);
     }
 }
 
@@ -81,15 +89,25 @@ void init_tasks() {
 }
 
 void scheduler() {
-  // read current time
-  uint32_t current_time = *((volatile uint32_t *)TIMG_T0LO_REG(0));
+  Serial.println("Scheduler running");
+  for (int i = 1; i < 5; i++) { // priority
+    Serial.print("Loop");
+    Serial.println(i);
+    for (int j = 0; j < 4; j++) { // tasks
+      if (task_list[j].status == READY && task_list[j].priority == i) {
+        task_list[j].status = RUNNING;
+        task_list[j].TaskFunc();
+        task_list[j].status = WAITING;
+        Serial.print(task_list[j].task_name);
+        Serial.print(": ");
+        Serial.println(task_list[j].priority);
+      }
+    }
+  }
 
   for (int i = 0; i < 4; i++) {
-    if ((current_time - task_list[i].last_time) >= task_list[i].delay) {
-      task_list[i].status = RUNNING;
-      task_list[i].TaskFunc();
-      task_list[i].status = WAITING;
-    }
+    task_list[i].priority = task_list[i].priority % 4 + 1;
+    task_list[i].status = READY;
   }
 }
 
@@ -116,35 +134,22 @@ void sendCommand(uint8_t data) {
 }
 
 void setup() {
+  Serial.begin(115200);
+  lcd.init();
+  Wire.begin();
+  delay(2);
+
   // set GPIO pins
   PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[OUTPUT1], PIN_FUNC_GPIO);
   PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[OUTPUT2], PIN_FUNC_GPIO);
 
-  // enable GPIO as output
-  *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT1);
-  *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT2);
-
-  // Configure timer
-  uint32_t timer_config = 0;
-
-  // apply a clock divider
-  timer_config |= (80 << 13);
-
-  // Set increment mode and enable timer
-  timer_config |= TIMER_INCREMENT_MODE;
-  timer_config |= TIMER_ENABLE;
-
-  // Write config to timer register
-  *((volatile uint32_t *)TIMG_T0CONFIG_REG(0)) = timer_config;
-
-  // Trigger a timer update to load settings
-  *((volatile uint32_t *)TIMG_T0UPDATE_REG(0)) = 1;
+  // TODO: enable registers
 
   // init tasks
   init_tasks();
 }
 
 void loop() {
+  Serial.println("Hello");
   scheduler();
-  *((volatile uint32_t *)TIMG_T0UPDATE_REG(0)) = 1;
 }

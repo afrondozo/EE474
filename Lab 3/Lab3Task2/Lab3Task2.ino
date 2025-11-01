@@ -16,13 +16,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define OUTPUT1 5
 #define OUTPUT2 6
 
-// Define TIMER_INCREMENT_MODE and TIMER_ENABLE macros
-#define TIMER_INCREMENT_MODE (1 << 30)
-#define TIMER_ENABLE (1 << 31)
-
-// set LED toggle times and potentiometer reading time
-#define LED1_TOGGLE_INTERVAL 1000000
-
 #define ADDR 0x27
 
 // Track last toggle time
@@ -41,30 +34,32 @@ typedef struct {
   int priority;
 } TCBStruct;
 
+// LED blinker 
 void TaskA(void) {
     // Read current GPIO output state
     // Toggle GPIO_PIN using XOR
     Serial.println("Running LED blinker");
-    for (int i = 0; i < 15; i ++) {
+    for (int i = 0; i < 16; i ++) {
       uint32_t gpio_out = *((volatile uint32_t *)GPIO_OUT_REG);
       *((volatile uint32_t *)GPIO_OUT_REG) = gpio_out ^ (1 << OUTPUT1);
       delay(500);
     }
 }
 
+// Counter
 void TaskB(void) {
+  sendCommand(0x01);
+  sendCommand(0x80);
+  delay(500);
   for (int i = 1; i < 10; i++) {
     writeLCD('0' + i);
     delay(1000);
   }
   writeLCD('1');
   writeLCD('0');
-  delay(1000);
-  sendCommand(0x01);
-  sendCommand(0x80);
-  delay(500);
 }
 
+// Music player
 void TaskC(void) {
     note_t notes[] = {NOTE_Bb, NOTE_B, NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G}; 
     for (int i = 0; i < 10; i++) {
@@ -73,10 +68,13 @@ void TaskC(void) {
     }
 }
 
+// Alphabet
 void TaskD(void) {
     for (char c = 'A'; c <= 'Z'; c++) {
-        Serial.println(c);
+        Serial.print(c);
+        Serial.print(' ');
     }
+    Serial.println();
 }
 
 TCBStruct task_list[4];
@@ -85,14 +83,12 @@ void init_tasks() {
   task_list[0] = (TCBStruct) { .TaskFunc = TaskA, .status = READY, .task_name = "LED Blinker", .priority = 1};
   task_list[1] = (TCBStruct) { .TaskFunc = TaskB, .status = READY, .task_name = "LCD Counter", .priority = 2};
   task_list[2] = (TCBStruct) { .TaskFunc = TaskC, .status = READY, .task_name = "Buzzer Notes", .priority = 3};
-  task_list[3] = (TCBStruct) { .TaskFunc = TaskD, .status = READY, .task_name = "Serial Alpha", .priority = 4};
+  task_list[3] = (TCBStruct) { .TaskFunc = TaskD, .status = READY, .task_name = "Serial Alphabet", .priority = 4};
 }
 
 void scheduler() {
   Serial.println("Scheduler running");
   for (int i = 1; i < 5; i++) { // priority
-    Serial.print("Loop");
-    Serial.println(i);
     for (int j = 0; j < 4; j++) { // tasks
       if (task_list[j].status == READY && task_list[j].priority == i) {
         task_list[j].status = RUNNING;
@@ -136,6 +132,7 @@ void sendCommand(uint8_t data) {
 void setup() {
   Serial.begin(115200);
   lcd.init();
+  sendCommand(0x0C);
   Wire.begin();
   delay(2);
 
@@ -143,13 +140,14 @@ void setup() {
   PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[OUTPUT1], PIN_FUNC_GPIO);
   PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[OUTPUT2], PIN_FUNC_GPIO);
 
-  // TODO: enable registers
+  // enable registers
+  *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT1);
+  *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT2);
 
   // init tasks
   init_tasks();
 }
 
 void loop() {
-  Serial.println("Hello");
   scheduler();
 }

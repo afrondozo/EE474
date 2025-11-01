@@ -1,3 +1,9 @@
+// Authors: Aidan Frondozo, Kylie Neal
+// Date: 11/1/25
+// Filename: Lab3Task1.ino
+// Description: This task takes a serial input and prints the message on the LCD.
+
+
 #include<Wire.h>
 #include<LiquidCrystal_I2C.h>
 
@@ -10,7 +16,7 @@ void setup() {
   Wire.begin();
   lcd.init();
   delay(10);
-  sendCommand(0x0C);
+  sendCommand(0x0C); // turns on display
 }
 
 void loop() {
@@ -23,12 +29,12 @@ void loop() {
     sendCommand(0x01);
     delay(2);
     for (int i = 0; i < bytesRead; i++) {
-      writeLCD(message[i]);
+      sendData(message[i]);
     }
   }
 }
 
-void writeLCD(uint8_t data) {
+void sendData(uint8_t data) {
   uint8_t high = data & 0xF0;
   uint8_t low = data << 4;
   Wire.beginTransmission(ADDR);

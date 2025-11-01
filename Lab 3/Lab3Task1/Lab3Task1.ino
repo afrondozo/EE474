@@ -6,58 +6,47 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define ADDR 0x27
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   Wire.begin();
   lcd.init();
-  delay(2);
-
+  delay(10);
+  sendCommand(0x0C);
 }
 
 void loop() {
-  char buf[32];
+  char message[32];
   if (Serial.available()) {
-    int len = Serial.readBytesUntil('\n', buf, sizeof(buf) - 1);
-    buf[len] = '\0';  // null-terminate it
-    send(0x01, 0);
+    int bytesRead = Serial.readBytesUntil('\n', message, sizeof(message) - 1);
+    message[bytesRead] = '\0';
+    sendCommand(0x80);
     delay(2);
-    send(0x80, 0);
-    for (int i = 0; i < len; i++) {
-      send(buf[i], 1);
+    sendCommand(0x01);
+    delay(2);
+    for (int i = 0; i < bytesRead; i++) {
+      writeLCD(message[i]);
     }
   }
 }
 
-// --- Low-level LCD helpers --- //
-void expanderWrite(uint8_t data) {
+void writeLCD(uint8_t data) {
+  uint8_t high = data & 0xF0;
+  uint8_t low = data << 4;
   Wire.beginTransmission(ADDR);
-  Wire.write(data | 0x08);  // bit 3 = backlight on
+  Wire.write(high | 0x0D);  // bit 3 = backlight on
+  Wire.write((high & ~0x04) | 0x09);  // bit 3 = backlight on
+  Wire.write(low | 0x0D);  // bit 3 = backlight on
+  Wire.write((low & ~0x04) | 0x09);  // bit 3 = backlight on
   Wire.endTransmission();
 }
 
-void pulseEnable(uint8_t data) {
-  expanderWrite(data | 0x04);   // EN=1
-  delayMicroseconds(1);
-  expanderWrite(data & ~0x04);  // EN=0
-  delayMicroseconds(50);
+void sendCommand(uint8_t data) {
+  int8_t high = data & 0xF0;
+  uint8_t low = data << 4;
+  Wire.beginTransmission(ADDR);
+  Wire.write(high | 0x0C);  // bit 3 = backlight on
+  Wire.write((high & ~0x04) | 0x08);  // bit 3 = backlight on
+  Wire.write(low | 0x0C);  // bit 3 = backlight on
+  Wire.write((low & ~0x04) | 0x08);  // bit 3 = backlight on
+  Wire.endTransmission();
 }
 
-void write4bits(uint8_t value) {
-  expanderWrite(value);
-  pulseEnable(value);
-}
-
-void send(uint8_t value, uint8_t mode) {
-  // mode=0 for command, 1 for data
-  uint8_t high = value & 0xF0;
-  uint8_t low  = (value << 4) & 0xF0;
-  write4bits(high | mode);
-  write4bits(low | mode);
-}
-
-void sendArray(const uint8_t *str) {
-  while (str) {
-    send(*str, 1);
-    *str++;
-  }
-}

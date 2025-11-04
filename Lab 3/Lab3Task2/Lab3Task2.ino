@@ -66,6 +66,8 @@ void TaskC(void) {
       ledcWriteNote(OUTPUT2, notes[i], 6); 
       delay(400);
     }
+
+    ledcWrite(OUTPUT2, 0);
 }
 
 // Alphabet
@@ -143,6 +145,8 @@ void setup() {
   // enable registers
   *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT1);
   *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT2);
+
+  ledcAttach(OUTPUT2, 1000, 8);
 
   // init tasks
   init_tasks();

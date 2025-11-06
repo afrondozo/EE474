@@ -116,7 +116,7 @@ void scheduler() {
 }
 
 // Name: writeLCD
-// Description: Writes the given data to the LCD
+// Description: Writes the given data to the LCD by pulsing enable
 void writeLCD(uint8_t data) {
   uint8_t high = data & 0xF0;
   uint8_t low = data << 4;
@@ -129,7 +129,7 @@ void writeLCD(uint8_t data) {
 }
 
 // Name: sendCommand
-// Description: Sends the given command to the LCD
+// Description: Sends the given command to the LCD by pulsing enable
 void sendCommand(uint8_t data) {
   int8_t high = data & 0xF0;
   uint8_t low = data << 4;

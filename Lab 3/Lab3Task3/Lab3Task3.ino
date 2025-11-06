@@ -1,37 +1,42 @@
+// Filename: Lab3Task3.ino
+// Authors: Aidan Frondozo, Kylie Neal
+// Date: 11/5/25
+// Description: This file implements using interrupts and the esp32 BLE module to recieve button or
+// bluetooth inputs and display messages on an LCD screen.
+
 #include <esp32-hal-timer.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 
+// ===== DEFINE BLE MODULES UUIDS =====
 #define SERVICE_UUID        "9bb6b113-953a-4247-abb1-8ff87f903b7d"
 #define CHARACTERISTIC_UUID "16b23f91-5dfe-4e12-8c83-1d7537820822"
-
+// ===== INITIALIZE LCD =====
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-
-hw_timer_t *timer = NULL;
-
-// --- Define Timer Interval --- //
-#define TOGGLE_INTERVAL_US 1000000  // 1 second
-
-// --- Define Pins --- //
+// ===== DEFINE BUTTON PIN =====
 #define BUTTON 5
-
-esp_timer_handle_t periodic_timer;
+// ===== DEFINE TIMER =====
+hw_timer_t *timer = NULL;
 
 volatile unsigned long lastInterruptTime = 0;
 const unsigned long debounceDelay = 200;  // milliseconds
 
-// --- Define Flags --- //
+// ===== DEFINE FLAGS =====
 bool buttonPressed = false;
 bool showBLEMessage = false;
 bool showTimer = true;
 volatile uint32_t timerValue = 0;
 
+// Name: onTimer
+// Description: increments the timer value
 void IRAM_ATTR onTimer() {
   timerValue++;
 }
 
+// Name: handleButtonInterrupt
+// Description: sets button flags and handles the debounce delay for button presses
 void IRAM_ATTR handleButtonInterrupt() {
   unsigned long currentTime = millis();
   if (currentTime - lastInterruptTime > debounceDelay) {
@@ -41,6 +46,8 @@ void IRAM_ATTR handleButtonInterrupt() {
   }
 }
 
+// Name: onWrite
+// Description: sets the BLE flag when a new value is written via BLE
 class MyCallbacks: public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     String value = pCharacteristic->getValue();
@@ -60,10 +67,11 @@ void setup() {
   pinMode(BUTTON, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonInterrupt, FALLING);
 
+  // Initialize timer
   timer = timerBegin(1000000);
   timerAttachInterrupt(timer, &onTimer);
   timerAlarm(timer, 1000000, true, 0);
-
+  // Initialize bluetooth
   BLEDevice::init("MyESP32"); // Change this to an unique name
   BLEServer *pServer = BLEDevice::createServer();
   BLEService *pService = pServer->createService(SERVICE_UUID);
@@ -71,18 +79,15 @@ void setup() {
                                        CHARACTERISTIC_UUID,
                                        BLECharacteristic::PROPERTY_READ |
                                        BLECharacteristic::PROPERTY_WRITE
-                                     );
+                                    );
   pService->start();
-  // the initial value for the characteristic we defined
   pCharacteristic->setValue("1");
-  // set call back
-  pCharacteristic->setCallbacks(new MyCallbacks());
+  pCharacteristic->setCallbacks(new MyCallbacks()); // set callback function
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   pAdvertising->start();
 }
 
 void loop() {
-  // displayTimer();
   if (buttonPressed) {
     Serial.println("Button Pressed!");
     timerStop(timer);
@@ -104,32 +109,34 @@ void loop() {
   }
 }
 
+// Name: displayBLEMessage
+// Description: displays BLE message on the LCD
 void displayBLEMessage() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("New message!");
   delay(2000);
 }
-
+// Name: displayTimer
+// Description: displays the timer count on the LCD
 void displayTimer() {
   lcd.setCursor(0, 0);
   lcd.print("Binary Counter:");
-
   lcd.setCursor(0, 1);
-  lcd.print(toBinary(timerValue, 16)); // Show 8 bits
-
+  lcd.print(toBinary(timerValue, 16)); // Show 16 bits
   delay(2);
 }
-
+// Name: displayButtonPressed
+// Description: displays the button pressed message on the LCD
 void displayButtonPressed() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Button pressed!");
-
   delay(2);
 }
 
-// --- Convert number to binary string with leading zeros --- //
+// Name: toBinary
+// Description: converts a 32 bit binary number into a string
 String toBinary(uint32_t num, int bits) {
   String s = "";
   for (int i = bits - 1; i >= 0; i--) {

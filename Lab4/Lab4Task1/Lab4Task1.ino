@@ -12,18 +12,15 @@ void ledTask(void *arg) {
    // TODO: Blink an LED and update remaining time for this task
 }
 
-
 void counterTask(void *arg) {
  // TODO: Print out an incrementing counter to your LCD, and 
  //       update remaining time for this task
 }
 
-
 void alphabetTask(void *arg) {
  // TODO: Print out the alphabet to Serial, and update remaining
  //       time for this task
 }
-
 
 void scheduleTasks(void *arg) {
    // TODO: Implement SRTF scheduling logic. This function should select the task with 

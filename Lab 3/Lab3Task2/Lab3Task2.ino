@@ -1,24 +1,23 @@
 // Filename: Lab3Task2.ino
 // Authors: Kylie Neal, Aidan Frondozo
+// Date: 11/05/2025
+// Description: This file implements a task scheduler with priorities.
 
-// Part 2:
+// ============== INCLUDES ==============
 #include "driver/gpio.h"
 #include "soc/io_mux_reg.h"
 #include "soc/gpio_reg.h"
 #include "soc/gpio_periph.h"
 #include "soc/timer_group_reg.h"
-
 #include<Wire.h>
 #include<LiquidCrystal_I2C.h>
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-
+// ============== MACROS ==============
 #define OUTPUT1 5
 #define OUTPUT2 6
-
 #define ADDR 0x27
 
-// Track last toggle time
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 static uint32_t last_toggle_time_LED1 = 0;
 
 typedef enum {
@@ -34,11 +33,11 @@ typedef struct {
   int priority;
 } TCBStruct;
 
-// LED blinker 
+// ============== FUNCTION PROTOTYPES ==============
+// Name: TaskA
+// Description: Toggles an LED 8 times, once per second
 void TaskA(void) {
-    // Read current GPIO output state
-    // Toggle GPIO_PIN using XOR
-    Serial.println("Running LED blinker");
+    // Read current GPIO output state, toggle GPIO_PIN using XOR
     for (int i = 0; i < 16; i ++) {
       uint32_t gpio_out = *((volatile uint32_t *)GPIO_OUT_REG);
       *((volatile uint32_t *)GPIO_OUT_REG) = gpio_out ^ (1 << OUTPUT1);
@@ -46,31 +45,34 @@ void TaskA(void) {
     }
 }
 
-// Counter
+// Name: TaskB
+// Description: Counts from 1 to 10 on the LCD Screen
 void TaskB(void) {
-  sendCommand(0x01);
-  sendCommand(0x80);
+  sendCommand(0x01); // clear lcd
+  sendCommand(0x80); // set cursor to beg
   delay(500);
   for (int i = 1; i < 10; i++) {
-    writeLCD('0' + i);
+    writeLCD('0' + i); 
     delay(1000);
   }
   writeLCD('1');
   writeLCD('0');
 }
 
-// Music player
+// Name: TaskC
+// Description: Plays 10 notes (ascending Cs and Gs) on the buzzer
 void TaskC(void) {
-    note_t notes[] = {NOTE_Bb, NOTE_B, NOTE_C, NOTE_Cs, NOTE_D, NOTE_Eb, NOTE_E, NOTE_F, NOTE_Fs, NOTE_G}; 
+    note_t notes[] = {NOTE_C, NOTE_G}; 
     for (int i = 0; i < 10; i++) {
-      ledcWriteNote(OUTPUT2, notes[i], 6); 
-      delay(400);
+      ledcWriteNote(OUTPUT2, notes[i % 2], (i / 2) + 4); 
+      delay(800);
     }
 
     ledcWrite(OUTPUT2, 0);
 }
 
-// Alphabet
+// Name: TaskD
+// Description: Prints alphabet onto serial monitor
 void TaskD(void) {
     for (char c = 'A'; c <= 'Z'; c++) {
         Serial.print(c);
@@ -79,8 +81,9 @@ void TaskD(void) {
     Serial.println();
 }
 
+// Name: init_tasks
+// Description: Initializes the 4 tasks A-D with initial priorities
 TCBStruct task_list[4];
-
 void init_tasks() {
   task_list[0] = (TCBStruct) { .TaskFunc = TaskA, .status = READY, .task_name = "LED Blinker", .priority = 1};
   task_list[1] = (TCBStruct) { .TaskFunc = TaskB, .status = READY, .task_name = "LCD Counter", .priority = 2};
@@ -88,8 +91,10 @@ void init_tasks() {
   task_list[3] = (TCBStruct) { .TaskFunc = TaskD, .status = READY, .task_name = "Serial Alphabet", .priority = 4};
 }
 
+// Name: scheduler
+// Description: Runs tasks based on priority. Resets priority to next priority.
 void scheduler() {
-  Serial.println("Scheduler running");
+  // Runs next set of tasks
   for (int i = 1; i < 5; i++) { // priority
     for (int j = 0; j < 4; j++) { // tasks
       if (task_list[j].status == READY && task_list[j].priority == i) {
@@ -103,12 +108,15 @@ void scheduler() {
     }
   }
 
+  // Resets priorities
   for (int i = 0; i < 4; i++) {
     task_list[i].priority = task_list[i].priority % 4 + 1;
     task_list[i].status = READY;
   }
 }
 
+// Name: writeLCD
+// Description: Writes the given data to the LCD by pulsing enable
 void writeLCD(uint8_t data) {
   uint8_t high = data & 0xF0;
   uint8_t low = data << 4;
@@ -120,6 +128,8 @@ void writeLCD(uint8_t data) {
   Wire.endTransmission();
 }
 
+// Name: sendCommand
+// Description: Sends the given command to the LCD by pulsing enable
 void sendCommand(uint8_t data) {
   int8_t high = data & 0xF0;
   uint8_t low = data << 4;
@@ -146,6 +156,7 @@ void setup() {
   *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT1);
   *((volatile uint32_t *)GPIO_ENABLE_REG) |= (1 << OUTPUT2);
 
+  // Initialize buzzer and LED2 output
   ledcAttach(OUTPUT2, 1000, 8);
 
   // init tasks

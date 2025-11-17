@@ -12,8 +12,7 @@
 #define LED_PIN 1
 
 // === SEMAPHORE ===
-SemaphoreHandle_t xBinarySemaphore;
-
+SemaphoreHandle_t dataReady;
 
 // === CIRCULAR BUFFER ===
 int buffer[5] = {0};
@@ -22,6 +21,7 @@ int bufferIndex = 0;
 // === LIGHT DETECTOR ===
 int currLightLevel = 0;
 int currSMA = 0;
+int lcdLightLevel = 0;
 
 void lightDetector(void *arg) {
   while (1) {
@@ -36,22 +36,57 @@ void lightDetector(void *arg) {
       sum += buffer[i];
     }
     currSMA = sum / 5
+
+    xSemaphoreGive(dataReady);
+    xSemaphoreGive(dataReady);
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
 
-void lcdDisplay(void *arg) {}
+// === LIGHT LEVEL DISPLAY ===
+void lcdDisplay(void *arg) {
+  while (1) {
+    if (xSemaphoreTake(dataReady, portMAX_DELAY) == pdTRUE & lcdLightLevel != currLightLevel) {
+      // display current light level and sma
+      lcdLightLevel = currLightLevel;
+      Serial.print("Light level: "); // test this works first
+      Serial.println(lcdLightLevel);
+    }
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+  }
+}
 
-void ledAlarm(void *arg) {}
+// === LIGHT LEVEL ALARM ===
+void ledAlarm(void *arg) {
+  while (1) {
+    // trigger an LED if currentLightLevel is below thresh
+  }
+}
 
-void primeNumberCalculator(void *arg) {}
+// === PRIME NUMBERS ===
+void primeNumberCalculator(void *arg) {
+  while (1) {
+    for (int i = 2; i <= 50000; n++) {
+      // calculate prime numbers
+    }
+  }
+}
 
 void setup() {
+  // initialize LCD
+  bool i2c_init = Wire.setPins(SDA, SCL);
+  Wire.begin();
+  lcd.init();
+  lcd.display();
+
+  // initialize the buffer with light level values
   int initialLightReading = analogRead(PHOTO_RESISTOR);
   for (int i = 0; i < WINDOW_SIZE; i++) {
         buffer[i] = initial;
   }
 
-  xBinarySemaphore = xSemaphoreCreateBinary();
+  // initialize semaphore
+  dataReady = xSemaphoreCreateBinary();
   pinMode();
 
 }

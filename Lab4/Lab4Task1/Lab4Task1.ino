@@ -1,8 +1,12 @@
+// Filename: Lab4Task1.ino
+// Authors: Kylie Neal, Aidan Frondozo
+// Description: Implements a shortest time remaining first scheduling algorithm.
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
-#include<LiquidCrystal_I2C.h>
-#include<Wire.h>
+#include "LiquidCrystal_I2C.h"
+#include "Wire.h"
 
 #define LED_PIN 5
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -21,17 +25,33 @@ TaskHandle_t ledTaskHandle = NULL;
 TaskHandle_t counterTaskHandle = NULL;
 TaskHandle_t alphaTaskHandle = NULL;
 
-
+/**
+ * @brief FreeRTOS task that toggles the LED at fixed intervals.
+ *
+ * This task decrements its remaining execution time and toggles the LED
+ * every 125 ms until its time slice is exhausted. The task suspends itself
+ * after each toggle and must be resumed by the scheduler.
+ *
+ * @param arg Unused task parameter.
+ */
 void ledTask(void *arg) {
   while (1) {
     if (remainingLedTime > 0) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-      remainingLedTime -= pdMS_TO_TICKS(100);
+      remainingLedTime -= pdMS_TO_TICKS(125);
     }
     vTaskSuspend(NULL);
   }
 }
 
+/**
+ * @brief FreeRTOS task that prints incrementing numbers to the LCD.
+ *
+ * The task prints numbers 1–20 to the LCD at 100 ms intervals. The task suspends itself
+ * after each toggle and must be resumed by the scheduler.
+ *
+ * @param arg Unused task parameter.
+ */
 void counterTask(void *arg) {
   int count = 1;
   while (1) {
@@ -51,6 +71,14 @@ void counterTask(void *arg) {
   }
 }
 
+/**
+ * @brief FreeRTOS task that prints letters A–Z to the Serial monitor.
+ *
+ * Prints letters in sequence every 500 ms, wrapping back to 'A' after 'Z'.
+ * The task consumes its allotted execution time and then suspends itself.
+ *
+ * @param arg Unused task parameter.
+ */
 void alphabetTask(void *arg) {
   char letter = 'A';
   while (1) {
@@ -67,20 +95,39 @@ void alphabetTask(void *arg) {
   }
 }
 
+/**
+ * @brief Custom scheduler task that manages execution of the LED, counter,
+ *        and alphabet tasks.
+ *
+ * This function implements a shortest time remaining scheduler that monitors the
+ * remaining execution times of each task. It resets task timers when
+ * needed and resumes whichever task currently has the lowest remaining
+ * time. The scheduler runs continuously and suspends/resumes tasks at
+ * fixed intervals.
+ *
+ * @param arg Unused task parameter.
+ */
 void scheduleTasks(void *arg) {
+  TickType_t currAlpha = remainingAlphabetTime;
   while (1) {
     // Grab current remaining times
     TickType_t currLed = remainingLedTime;
     TickType_t currCounter = remainingCounterTime;
-    TickType_t currAlpha = remainingAlphabetTime;
+    TickType_t prevAlpha = currAlpha;
+    currAlpha = remainingAlphabetTime;
 
-    if (currLed <= 0 && currCounter <= 0 && currAlpha <= 0) { // reset if all done !!
+    if (currLed <= 0 && (currAlpha != prevAlpha)) { // reset blinking led
+      remainingLedTime = ledTaskExecutionTime;
+    } 
+    
+    if (currCounter <= 0 && (currAlpha != prevAlpha)) { // reset counter
       lcd.clear();
       lcd.setCursor(0, 0);
-      Serial.println();
-
-      remainingLedTime = ledTaskExecutionTime;
       remainingCounterTime = counterTaskExecutionTime;
+    }
+    
+    if (currAlpha <= 0) { // reset alpha
+      Serial.println();
       remainingAlphabetTime = alphabetTaskExecutionTime;
     }
 

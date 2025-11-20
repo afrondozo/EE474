@@ -1,0 +1,4 @@
+var searchData=
+[
+  ['photo_5fresistor_0',['PHOTO_RESISTOR',['../_lab4_task2_8ino.html#ada9c2192d9f9b89ae828a49896246578',1,'Lab4Task2.ino']]]
+];

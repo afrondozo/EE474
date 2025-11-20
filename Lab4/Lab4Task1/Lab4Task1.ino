@@ -134,7 +134,7 @@ void scheduleTasks(void *arg) {
     // Determine which task to run
     if (currLed > 0 && (currLed <= currCounter || currCounter <= 0) && (currLed <= currAlpha || currAlpha <= 0)) {
       vTaskResume(ledTaskHandle);
-      vTaskDelay(pdMS_TO_TICKS(100));
+      vTaskDelay(pdMS_TO_TICKS(125));
     } else if (currCounter > 0 && (currCounter <= currLed || currLed <= 0) && (currCounter <= currAlpha || currAlpha <= 0)) {
       vTaskResume(counterTaskHandle);
       vTaskDelay(pdMS_TO_TICKS(100));

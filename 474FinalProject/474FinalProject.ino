@@ -32,10 +32,12 @@ volatile int buttonState = 0;  // shared state, toggled by button task
 * @param temp current temperature
 */
 void displayTemp (float temp) {
-  lcd0.clear();
-  lcd0.print("Temperature:");
+  // lcd0.clear();
+  // lcd0.print("Temperature:");
   lcd0.setCursor(0, 1);
-  lcd0.print(String(temp) + "F");
+  lcd0.print("                ");
+  lcd0.setCursor(0, 1);
+  lcd0.print("Temp: " + String(temp) + "F");
 }
 /**
 * @brief Helper method for outputting a humidity display on LCD
@@ -44,10 +46,14 @@ void displayTemp (float temp) {
 * @param humid current humidity
 */
 void displayHumidity (float humid) {
-  lcd0.clear();
-  lcd0.print("Humidity:");
+  // lcd0.clear();
+  // lcd0.print("Humidity:");
+  // lcd0.setCursor(0, 1);
+  // lcd0.print(String(humid) + "%");
   lcd0.setCursor(0, 1);
-  lcd0.print(String(humid) + "%");
+  lcd0.print("                ");
+  lcd0.setCursor(0, 1);
+  lcd0.print("Humidity: " + String(humidity) + "%");
 }
 /**
  * @brief FreeRTOS task to read data from the AM2320 sensor.

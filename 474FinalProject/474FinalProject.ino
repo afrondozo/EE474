@@ -12,6 +12,7 @@
 #include <MFRC522.h>
 #include <RTClib.h>
 
+// === PINS USED FOR RFID ===
 #define SS_PIN  5  
 #define RST_PIN 11 
 #define RED_LED 7
@@ -19,23 +20,22 @@
 #define TOGGLE_INTERVAL_GREEN 2000000  // 2 seconds
 #define TOGGLE_INTERVAL_RED 2000000  // 2 seconds
 
+// === UUID ===
 const byte correctUID[] = {0xAA, 0x22, 0x0A, 0x01};
 const byte correctUIDLength = 4;
 
+// === RFID ===
 MFRC522 rfid(SS_PIN, RST_PIN);
+
+// === RTC ===
 RTC_DS3231 rtc;
 DateTime now;
 
+// === ESP32 TIMERS ===
 esp_timer_handle_t green_timer;
 esp_timer_handle_t red_timer;
-
-void IRAM_ATTR greenOnTimer(void* arg) {
-  digitalWrite(GREEN_LED, 0);
-}
-
-void IRAM_ATTR redOnTimer(void* arg) {
-  digitalWrite(RED_LED, 0);
-}
+TaskHandle_t clockTaskHandle = NULL;
+TaskHandle_t rfidTaskHandle = NULL;
 
 char daysOfWeek[7][12] = {
   "Sunday",
@@ -46,10 +46,6 @@ char daysOfWeek[7][12] = {
   "Friday",
   "Saturday"
 };
-
-
-TaskHandle_t clockTaskHandle = NULL;
-TaskHandle_t rfidTaskHandle = NULL;
 
 // === LCD ===
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -71,14 +67,34 @@ SemaphoreHandle_t buttonSemaphore;
 volatile int buttonState = 0;  // shared state, toggled by button task
 
 /**
+ * @brief Timer callback to turn on the green LED.
+ *
+ * This ISR-safe callback is triggered by a hardware timer.
+ * It sets the GREEN_LED pin LOW to turn the LED on.
+ *
+ * @param arg Unused timer callback argument.
+ */
+void IRAM_ATTR greenOnTimer(void* arg) {
+  digitalWrite(GREEN_LED, 0);
+}
+/**
+ * @brief Timer callback to turn on the red LED.
+ *
+ * This ISR-safe callback is triggered by a hardware timer.
+ * It sets the RED_LED pin LOW to turn the LED on.
+ *
+ * @param arg Unused timer callback argument.
+ */
+void IRAM_ATTR redOnTimer(void* arg) {
+  digitalWrite(RED_LED, 0);
+}
+/**
 * @brief Helper method for outputting a temperature display on LCD
 *
 * Displays current outdoor temperature reading on LCD
 * @param temp current temperature
 */
 void displayTemp (float temp) {
-  // lcd.clear();
-  // lcd.print("Temperature:");
   lcd.setCursor(0, 1);
   lcd.print("                ");
   lcd.setCursor(0, 1);
@@ -91,16 +107,23 @@ void displayTemp (float temp) {
 * @param humid current humidity
 */
 void displayHumidity (float humid) {
-  // lcd.clear();
-  // lcd.print("Humidity:");
-  // lcd.setCursor(0, 1);
-  // lcd.print(String(humid) + "%");
   lcd.setCursor(0, 1);
   lcd.print("                ");
   lcd.setCursor(0, 1);
   lcd.print("Humidity: " + String(humidity) + "%");
 }
-
+/**
+ * @brief Compares a scanned RFID UID with the correct UID.
+ *
+ * This function checks whether the provided UID matches the
+ * known correct UID by comparing each byte. If the lengths
+ * differ or any byte does not match, the function returns false.
+ *
+ * @param uid Pointer to the UID byte array to compare.
+ * @param uidLength Length of the provided UID array.
+ * @return true If the UID matches the correct UID.
+ * @return false If the length differs or any byte does not match.
+ */
 bool compareUID(byte *uid, byte uidLength) {
   if (uidLength != correctUIDLength) return false;
   for (int i = 0; i < uidLength; i++) {
@@ -108,9 +131,13 @@ bool compareUID(byte *uid, byte uidLength) {
   }
   return true;
 }
-
+/**
+ * @brief Helper method for printing time.
+ * 
+ * This helper method prints the time from the RTC module
+ * to the serial monitor.
+ */
 void printTime() {
-  // DateTime now = rtc.now();
   Serial.print(now.year(), DEC);
   Serial.print('/');
   Serial.print(now.month(), DEC);
@@ -125,7 +152,6 @@ void printTime() {
   Serial.print(':');
   Serial.println(now.second(), DEC);
 }
-
 /**
  * @brief FreeRTOS task to read data from the AM2320 sensor.
  * 
@@ -204,7 +230,6 @@ void TASK_ButtonHandler(void *args) {
           // toggle display mode
           buttonState ^= 1;
           lastPressTime = currentTime;
-          //Serial.println(buttonState ? "Temperature" : "Humidity");
       }
     }
   }
@@ -226,7 +251,17 @@ void IRAM_ATTR handleButtonInterrupt() {
   xSemaphoreGiveFromISR(buttonSemaphore, &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
-
+/**
+ * @brief FreeRTOS task that continuously updates the clock display on the LCD.
+ *
+ * This task reads the current time from the RTC and prints it on the first row
+ * of the LCD. A semaphore (`lcdReady`) is used to guarantee exclusive access
+ * to the LCD so other tasks do not write at the same time.
+ *
+ * The display is refreshed every 500 ms.
+ *
+ * @param parameter Unused task parameter.
+ */
 void clockTask(void* parameter) {
   while (1) {
     // Print time
@@ -241,7 +276,23 @@ void clockTask(void* parameter) {
     vTaskDelay(500 / portTICK_PERIOD_MS);  // update every 0.5 sec
   }
 }
-
+/**
+ * @brief FreeRTOS task that handles RFID card detection and validation.
+ *
+ * This task continuously checks for a new RFID card. When a card is detected,
+ * it reads the UID and compares it against a known valid UID using
+ * compareUID().  
+ *
+ * - If the UID is valid, the green LED is turned on and a one-shot timer
+ *   is started to turn it off after a predefined interval.
+ * - If the UID is invalid, the red LED is activated and its timer is started.
+ *
+ * The task also prints timestamped results and invalid UID values to the
+ * serial monitor for debugging. After processing, the card is halted and
+ * RFID communication is stopped before looping again.
+ *
+ * @param parameter Unused task parameter.
+ */
 void rfidTask(void* parameter) {
   while (1) {
     if (rfid.PICC_IsNewCardPresent()) { // new tag is available
@@ -276,7 +327,11 @@ void rfidTask(void* parameter) {
     vTaskDelay(50 / portTICK_PERIOD_MS);  // slight pause
   }
 }
-
+/**
+* @brief Setup function for initial configuration.
+*
+* Sets up all GPIO pins, I2C, RFID, temperature, and RTC modules
+*/
 void setup() {
   // initialize serial port
   Serial.begin(115200);

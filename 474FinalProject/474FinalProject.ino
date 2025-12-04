@@ -13,7 +13,6 @@
 #include <MFRC522.h>
 #include <RTClib.h>
 
-
 // === PINS USED FOR RFID ===
 #define SS_PIN  5  
 #define RST_PIN 11 
@@ -32,42 +31,12 @@ MFRC522 rfid(SS_PIN, RST_PIN);
 // === RTC ===
 RTC_DS3231 rtc;
 DateTime now;
-const byte correctUID[] = {0xAA, 0x22, 0x0A, 0x01};
-const byte correctUIDLength = 4;
-
 
 // === ESP32 TIMERS ===
 esp_timer_handle_t green_timer;
 esp_timer_handle_t red_timer;
 TaskHandle_t clockTaskHandle = NULL;
 TaskHandle_t rfidTaskHandle = NULL;
-
-// === TIMER HANDLES ===
-esp_timer_handle_t green_timer;
-esp_timer_handle_t red_timer;
-
-/**
- * @brief ISR callback to turn off the green LED
- *
- * This interrupt service routine is triggered by a hardware timer
- * and sets the GREEN_LED pin low, turning the LED off.
- *
- * @param arg unused parameter
- */
-void IRAM_ATTR greenOnTimer(void* arg) {
-  digitalWrite(GREEN_LED, 0);
-}
-/**
- * @brief ISR callback to turn off the red LED
- *
- * This interrupt service routine is triggered by a hardware timer
- * and sets the RED_LED pin low, turning the LED off.
- *
- * @param arg unused parameter
- */
-void IRAM_ATTR redOnTimer(void* arg) {
-  digitalWrite(RED_LED, 0);
-}
 
 // === DAYS OF WEEK ===
 char daysOfWeek[7][12] = {

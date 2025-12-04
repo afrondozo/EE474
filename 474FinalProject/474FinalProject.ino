@@ -2,6 +2,7 @@
 // Authors: Kylie Neal, Aidan Frondozo
 // Description: implements a smart rfid security system
 
+// === INCLUDES ===
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -11,6 +12,7 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <RTClib.h>
+
 
 // === PINS USED FOR RFID ===
 #define SS_PIN  5  
@@ -30,6 +32,9 @@ MFRC522 rfid(SS_PIN, RST_PIN);
 // === RTC ===
 RTC_DS3231 rtc;
 DateTime now;
+const byte correctUID[] = {0xAA, 0x22, 0x0A, 0x01};
+const byte correctUIDLength = 4;
+
 
 // === ESP32 TIMERS ===
 esp_timer_handle_t green_timer;
@@ -37,6 +42,34 @@ esp_timer_handle_t red_timer;
 TaskHandle_t clockTaskHandle = NULL;
 TaskHandle_t rfidTaskHandle = NULL;
 
+// === TIMER HANDLES ===
+esp_timer_handle_t green_timer;
+esp_timer_handle_t red_timer;
+
+/**
+ * @brief ISR callback to turn off the green LED
+ *
+ * This interrupt service routine is triggered by a hardware timer
+ * and sets the GREEN_LED pin low, turning the LED off.
+ *
+ * @param arg unused parameter
+ */
+void IRAM_ATTR greenOnTimer(void* arg) {
+  digitalWrite(GREEN_LED, 0);
+}
+/**
+ * @brief ISR callback to turn off the red LED
+ *
+ * This interrupt service routine is triggered by a hardware timer
+ * and sets the RED_LED pin low, turning the LED off.
+ *
+ * @param arg unused parameter
+ */
+void IRAM_ATTR redOnTimer(void* arg) {
+  digitalWrite(RED_LED, 0);
+}
+
+// === DAYS OF WEEK ===
 char daysOfWeek[7][12] = {
   "Sunday",
   "Monday",
@@ -336,6 +369,7 @@ void setup() {
   // initialize serial port
   Serial.begin(115200);
 
+  // initialize rfid communication
   SPI.begin(36, 37, 35, SS_PIN);
   rfid.PCD_Init(); // init MFRC522
 
@@ -344,6 +378,7 @@ void setup() {
   pinMode(GREEN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
 
+  // initialize clock
   if (! rtc.begin()) {
     Serial.println("RTC module is NOT found");
     Serial.flush();
@@ -352,22 +387,21 @@ void setup() {
   // automatically sets the RTC to the date & time on PC this sketch was compiled
   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)) + TimeSpan(0, 0, 0, 14));
 
+  // initialize timer arguments
   const esp_timer_create_args_t green_timer_args = {
     .callback = &greenOnTimer,
     .arg = NULL,
     .name = "green_timer"
   };
-
   const esp_timer_create_args_t red_timer_args = {
     .callback = &redOnTimer,
     .arg = NULL,
     .name = "red_timer"
   };
 
+  // initialize timers
   esp_timer_create(&green_timer_args, &green_timer);
   esp_timer_create(&red_timer_args, &red_timer);
-
-  Serial.println("Tap an RFID/NFC tag on the RFID-RC522 reader");
 
   // initialize lcd
   Wire.begin();
@@ -386,6 +420,7 @@ void setup() {
   xSemaphoreGive(buttonSemaphore);
   xSemaphoreGive(lcdReady);
 
+  // === CLOCK AND RFID TASKS ===
   xTaskCreatePinnedToCore(clockTask, "Clock Task", 4096, NULL, 0, &clockTaskHandle, 0);
   xTaskCreatePinnedToCore(rfidTask, "RFID Task", 8192, NULL, 1, &rfidTaskHandle, 1);
   // === TEMPERATURE SENSOR TASKS ===
@@ -395,6 +430,7 @@ void setup() {
   // === BUTTON INTERUPT FOR SENSOR DISPLAY ===
   attachInterrupt(digitalPinToInterrupt(button), handleButtonInterrupt, FALLING);
 
+  Serial.println("Tap an RFID/NFC tag on the RFID-RC522 reader");
   delay(2000);
 }
 
